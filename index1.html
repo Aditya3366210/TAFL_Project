@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CFG Ambiguity Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#06090f;--sur:#0d1117;--sur2:#121820;--sur3:#161d26;
+  --b1:#1a2535;--b2:#243040;--b3:#2e3d50;
+  --tx:#cdd9e8;--tm:#607590;--td:#2e3f52;
+  --blue:#4a9ef0;--blue2:#1a4878;--blue3:rgba(74,158,240,.18);
+  --green:#30be68;--green2:#0c3f20;--green3:rgba(48,190,104,.18);
+  --amber:#f0a030;--amber2:rgba(240,160,48,.22);--amber3:rgba(240,160,48,.55);
+  --red:#e04840;--red2:rgba(224,72,64,.1);
+  --font:'JetBrains Mono',monospace;
+}
+html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--tx);font-size:13px;line-height:1.5}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(74,158,240,.045) 1px,transparent 1px);background-size:26px 26px;pointer-events:none;z-index:0}
+.app{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* ── Header ── */
+header{padding:13px 22px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:12px;background:rgba(6,9,15,.92);backdrop-filter:blur(12px);position:sticky;top:0;z-index:20}
+header h1{font-size:15px;font-weight:700;letter-spacing:-.3px}
+header h1 em{font-style:normal;color:var(--blue)}
+.hbadge{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;padding:2px 8px;border-radius:99px;background:rgba(74,158,240,.08);color:var(--blue);border:1px solid rgba(74,158,240,.18)}
+.hspace{flex:1}
+.hhint{font-size:10px;color:var(--td)}
+
+/* ── Layout ── */
+.main{display:flex;flex:1;min-height:0}
+
+/* ── Input Panel ── */
+.ipanel{width:310px;min-width:280px;border-right:1px solid var(--b1);padding:18px 16px;display:flex;flex-direction:column;gap:13px;overflow-y:auto;background:rgba(13,17,23,.55)}
+.flabel{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--tm)}
+.fdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.fdot-b{background:var(--blue)}.fdot-g{background:var(--green)}
+textarea,input[type=text]{width:100%;background:var(--sur);border:1px solid var(--b1);border-radius:6px;color:var(--tx);font-family:var(--font);font-size:12px;padding:8px 10px;outline:none;transition:border-color .2s,box-shadow .2s}
+textarea{min-height:96px;resize:vertical}
+textarea:focus,input[type=text]:focus{border-color:var(--blue2);box-shadow:0 0 0 3px rgba(26,72,120,.28)}
+textarea::placeholder,input::placeholder{color:var(--td)}
+.row{display:flex;gap:8px}.col{flex:1}
+select{width:100%;background:var(--sur);border:1px solid var(--b1);border-radius:6px;color:var(--tx);font-family:var(--font);font-size:11px;padding:6px 8px;outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23607590'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.runbtn{width:100%;padding:10px;border:none;border-radius:6px;background:linear-gradient(135deg,#1a4878,#2660b0);color:#fff;font-family:var(--font);font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;cursor:pointer;transition:all .2s;box-shadow:0 2px 12px rgba(26,72,120,.4),inset 0 1px 0 rgba(255,255,255,.06)}
+.runbtn:hover{background:linear-gradient(135deg,#2660b0,#3b82f6);transform:translateY(-1px);box-shadow:0 4px 18px rgba(59,130,246,.4)}
+.runbtn:active{transform:translateY(0)}
+.shdr{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--td);margin-bottom:6px}
+.slist{display:flex;flex-direction:column;gap:4px}
+.sbtn{width:100%;text-align:left;background:var(--sur);border:1px solid var(--b1);border-radius:5px;color:var(--tm);font-family:var(--font);font-size:11px;padding:6px 9px;cursor:pointer;transition:all .15s;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sbtn:hover{border-color:var(--b2);color:var(--tx);background:var(--sur2)}
+.stag{font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 6px;border-radius:8px;flex-shrink:0;text-transform:uppercase}
+.stag-a{background:var(--red2);color:var(--red);border:1px solid rgba(224,72,64,.25)}
+.stag-u{background:var(--green3);color:var(--green);border:1px solid rgba(48,190,104,.25)}
+
+/* ── Results Panel ── */
+.rpanel{flex:1;padding:20px;overflow-y:auto;overflow-x:hidden;position:relative}
+.placeholder{height:100%;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--td)}
+.ph-icon{font-size:38px;opacity:.18;line-height:1}
+.ph-txt{font-size:11px;text-align:center;line-height:2;max-width:250px}
+
+/* Verdict */
+.rhdg{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--b1)}
+.verdict{font-size:17px;font-weight:700;letter-spacing:-.4px;display:flex;align-items:center;gap:8px}
+.verdict.va{color:var(--red)}.verdict.vu{color:var(--green)}.verdict.vn{color:var(--amber)}
+.vdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.va .vdot{background:var(--red);box-shadow:0 0 8px var(--red)}
+.vu .vdot{background:var(--green);box-shadow:0 0 8px var(--green)}
+.vn .vdot{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.metarow{display:flex;gap:8px;flex-wrap:wrap}
+.mpill{font-size:10px;padding:2px 9px;border-radius:16px;background:var(--sur);border:1px solid var(--b1);color:var(--tm)}
+.mpill strong{color:var(--tx)}
+
+/* Grammar */
+.gdisp{margin-bottom:13px;padding:10px 12px;background:var(--sur);border:1px solid var(--b1);border-radius:6px;font-size:11px;line-height:2.2}
+.gnt{color:#5ba7ff;font-weight:700}.gt{color:#42cc76}.garr{color:var(--td);margin:0 4px}.gpipe{color:var(--td);margin:0 4px}
+
+/* Legend */
+.legend{display:flex;gap:12px;margin-bottom:13px;font-size:10px;color:var(--td);align-items:center;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:5px}
+.lb{width:12px;height:12px;border-radius:3px}
+.lb-nt{background:#0a1628;border:1.5px solid #3b82f6}
+.lb-t{background:#041a0d;border:1.5px solid #22c55e}
+.lb-sel{background:#1a1000;border:1.5px solid var(--amber)}
+.lsep{color:var(--td)}
+
+/* Alerts */
+.warnbox{padding:9px 12px;margin-bottom:13px;background:rgba(240,160,48,.06);border:1px solid rgba(240,160,48,.2);border-radius:6px;font-size:11px;color:var(--amber)}
+.errbox{padding:12px;background:var(--red2);border:1px solid rgba(224,72,64,.2);border-radius:6px;font-size:11px;color:var(--red)}
+
+/* ── Tree Cards ── */
+.tgrid{display:flex;flex-direction:column;gap:14px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.tcard{background:var(--sur);border:1px solid var(--b1);border-radius:8px;overflow:hidden;animation:fadeUp .3s ease both}
+
+.tcardh{padding:8px 12px;background:var(--sur2);border-bottom:1px solid var(--b1);display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:700;color:var(--tm);letter-spacing:.5px}
+.zctrl{display:flex;gap:4px;align-items:center}
+.zbtn{width:22px;height:22px;background:var(--sur);border:1px solid var(--b1);border-radius:4px;color:var(--tm);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;flex-shrink:0}
+.zbtn:hover{border-color:var(--b2);color:var(--tx)}
+.zlbl{font-size:9px;color:var(--td);min-width:32px;text-align:center;letter-spacing:.5px}
+
+/* Viewport (pan/zoom container) */
+.tvp{overflow:hidden;background:var(--bg);cursor:grab;position:relative;border-bottom:1px solid var(--b1)}
+.tvp.pgrab{cursor:grabbing}
+.twrap{transform-origin:0 0;display:inline-block}
+
+/* SVG interactive node styles */
+.tree-node{cursor:pointer}
+.tree-node .nr{transition:stroke .15s,stroke-width .15s,filter .15s}
+.tree-node:hover.nt .nr{filter:drop-shadow(0 0 5px rgba(74,158,240,.55))}
+.tree-node:hover.tt .nr{filter:drop-shadow(0 0 5px rgba(48,190,104,.55))}
+.tree-node.sel .nr{filter:drop-shadow(0 0 8px rgba(240,160,48,.7))}
+.tree-node.shi .nr{filter:drop-shadow(0 0 4px rgba(240,160,48,.4))}
+.tedge{transition:stroke .2s,stroke-width .2s;stroke:#1a2535;stroke-width:1.5px;fill:none}
+.tedge.ehi{stroke:rgba(220,140,30,.7);stroke-width:2px}
+
+/* Derivation */
+.dersec{padding:6px 12px 10px;border-top:1px solid var(--b1)}
+.dertog{background:none;border:none;color:var(--td);font-family:var(--font);font-size:10px;cursor:pointer;padding:3px 0;display:flex;align-items:center;gap:5px;transition:color .15s}
+.dertog:hover{color:var(--tm)}
+.dersteps{display:none;margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:5px;font-size:10px;color:var(--tm);line-height:2.1;overflow-x:auto;white-space:nowrap}
+.dersteps.open{display:block}
+.dnt{color:#5ba7ff;font-weight:700}.darr{color:var(--blue2);margin:0 4px}
+
+/* ── Node Info Panel ── */
+.nipanel{position:fixed;bottom:0;left:0;right:0;background:rgba(8,12,20,.97);border-top:1px solid var(--b2);backdrop-filter:blur(14px);padding:10px 22px;display:flex;align-items:center;gap:18px;transform:translateY(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:60;flex-wrap:wrap}
+.nipanel.vis{transform:translateY(0)}
+.ni-sym{font-size:17px;font-weight:700}
+.ni-sym.nt{color:var(--blue)}.ni-sym.tt{color:var(--green)}
+.ni-type{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--td)}
+.nisep{width:1px;height:26px;background:var(--b2);flex-shrink:0}
+.ni-glp{display:flex;flex-direction:column;gap:2px}
+.ni-lbl{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--td)}
+.ni-val{color:var(--tx);font-size:11px}
+.ni-derv{color:var(--amber);font-size:11px}
+.niclose{margin-left:auto;background:none;border:none;color:var(--tm);font-size:16px;cursor:pointer;padding:4px;transition:color .15s;font-family:var(--font)}
+.niclose:hover{color:var(--tx)}
+
+/* Loading */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin 1s linear infinite}
+
+/* Responsive */
+@media(max-width:680px){.main{flex-direction:column}.ipanel{width:100%;min-width:unset;border-right:none;border-bottom:1px solid var(--b1)}.hhint{display:none}}
+</style>
+</head>
+<body>
+
+<!-- Shared SVG gradient/filter defs -->
+<svg id="gdefs" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+  <defs>
+    <linearGradient id="nt-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d2040"/>
+      <stop offset="100%" stop-color="#081428"/>
+    </linearGradient>
+    <linearGradient id="t-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#062018"/>
+      <stop offset="100%" stop-color="#031209"/>
+    </linearGradient>
+    <linearGradient id="sel-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#281800"/>
+      <stop offset="100%" stop-color="#180e00"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="app">
+  <header>
+    <h1>CFG <em>Ambiguity</em> Detector</h1>
+    <span class="hbadge">Parse Tree Analysis</span>
+    <div class="hspace"></div>
+    <span class="hhint">Click nodes · Scroll to zoom · Drag to pan</span>
+  </header>
+
+  <div class="main">
+    <!-- INPUT PANEL -->
+    <div class="ipanel">
+      <div>
+        <label class="flabel"><span class="fdot fdot-b"></span>Grammar Rules</label>
+        <textarea id="grammar-input" rows="6" placeholder="S → S+S | SS | a&#10;&#10;One rule per line.&#10;| separates alternatives.&#10;Uppercase = non-terminal.&#10;Lowercase/symbols = terminal."></textarea>
+      </div>
+      <div>
+        <label class="flabel"><span class="fdot fdot-g"></span>Input String <span style="color:var(--td);font-weight:400">(max 12)</span></label>
+        <input type="text" id="string-input" placeholder="e.g., a+aa" maxlength="12">
+      </div>
+      <div class="row">
+        <div class="col">
+          <label class="flabel">Max Trees</label>
+          <select id="max-trees">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <div class="col">
+          <label class="flabel">Max Depth</label>
+          <select id="max-depth">
+            <option value="8">8</option>
+            <option value="12" selected>12</option>
+            <option value="16">16</option>
+          </select>
+        </div>
+      </div>
+      <button class="runbtn" onclick="checkAmbiguity()">▶ Check Ambiguity</button>
+      <div>
+        <div class="shdr">Sample Grammars</div>
+        <div class="slist" id="sample-list"></div>
+      </div>
+    </div>
+
+    <!-- RESULTS PANEL -->
+    <div class="rpanel" id="results-panel">
+      <div class="placeholder">
+        <div class="ph-icon">⊢</div>
+        <p class="ph-txt">Enter a grammar and an input string, then click <strong>Check Ambiguity</strong> to enumerate parse trees.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Node Info Panel (slides up from bottom) -->
+<div class="nipanel" id="nipanel">
+  <div>
+    <div class="ni-type" id="ni-type"></div>
+    <div class="ni-sym" id="ni-sym"></div>
+  </div>
+  <div class="nisep"></div>
+  <div class="ni-glp">
+    <div class="ni-lbl">Production</div>
+    <div class="ni-val" id="ni-prod"></div>
+  </div>
+  <div class="nisep"></div>
+  <div class="ni-glp">
+    <div class="ni-lbl">Derives</div>
+    <div class="ni-derv" id="ni-derv"></div>
+  </div>
+  <button class="niclose" onclick="hideNodeInfo()" title="Dismiss">✕</button>
+</div>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════
+   SAMPLES
+═══════════════════════════════════════════ */
+const SAMPLES = [
+  { label:'Classic ambiguous',      grammar:'S → S+S | SS | a',   input:'a+aa',   ambig:true  },
+  { label:'Expression grammar',     grammar:'E → E+E | E*E | a',  input:'a+a*a',  ambig:true  },
+  { label:'Unambiguous aⁿbⁿ',       grammar:'S → aSb | ab',       input:'aaabbb', ambig:false },
+  { label:'Unambiguous repetition', grammar:'S → aS | a',         input:'aaa',    ambig:false },
+  { label:'Ambiguous balanced',     grammar:'S → SS | aSb | ab',  input:'ababab', ambig:true  },
+];
+
+/* ═══════════════════════════════════════════
+   GLOBALS
+═══════════════════════════════════════════ */
+let G_RULES, G_MEMO, G_VISIT, G_MAX_TREES, G_MAX_DEPTH;
+let activePZ = null; // the pan-zoom state currently being dragged
+
+/* ═══════════════════════════════════════════
+   1. GRAMMAR PARSER
+═══════════════════════════════════════════ */
+function parseGrammar(text) {
+  const rules = {};
+  let start = null;
+  const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//') && !l.startsWith('#'));
+  if (!lines.length) throw new Error('Grammar is empty.');
+  if (lines.length > 20) throw new Error('Too many rules (max 20 lines).');
+  for (const line of lines) {
+    const m = line.match(/^([A-Z])\s*(?:→|->)\s*(.+)$/);
+    if (!m) throw new Error(`Bad rule: "${line}"\nExpected: A → prod1 | prod2`);
+    const [, lhs, rhs] = m;
+    if (!start) start = lhs;
+    if (!rules[lhs]) rules[lhs] = [];
+    rules[lhs].push(...rhs.split('|').map(p => tokenize(p.trim())));
+  }
+  return { rules, start };
+}
+
+function tokenize(prod) {
+  if (prod === 'ε' || prod === 'eps' || prod === '') return [];
+  return prod.split('').filter(c => c !== ' ');
+}
+
+/* ═══════════════════════════════════════════
+   2. PARSE TREE GENERATOR
+═══════════════════════════════════════════ */
+/* Each node: { sym, isNT, prod, children, span } */
+
+function getAllTrees(sym, input, depth) {
+  if (depth > G_MAX_DEPTH) return [];
+  const key = sym + '\0' + input;
+  if (G_MEMO.has(key)) return G_MEMO.get(key);
+  if (G_VISIT.has(key)) return [];
+  G_VISIT.add(key);
+  const out = [];
+  if (!G_RULES[sym]) {
+    if (input === sym) out.push({ sym, isNT:false, prod:null, children:[], span:input });
+  } else {
+    for (const prod of G_RULES[sym]) {
+      if (out.length >= G_MAX_TREES) break;
+      for (const children of splitDerive(prod, input, depth + 1)) {
+        if (out.length >= G_MAX_TREES) break;
+        out.push({ sym, isNT:true, prod, children:children.slice(), span:input });
+      }
+    }
+  }
+  G_VISIT.delete(key);
+  G_MEMO.set(key, out);
+  return out;
+}
+
+function splitDerive(syms, input, depth) {
+  if (depth > G_MAX_DEPTH) return [];
+  if (!syms.length) return input === '' ? [[]] : [];
+  const [first, ...rest] = syms;
+  const out = [];
+  const CAP = G_MAX_TREES * G_MAX_TREES;
+  for (let i = 0; i <= input.length; i++) {
+    const lt = getAllTrees(first, input.slice(0, i), depth);
+    if (!lt.length) continue;
+    const rc = splitDerive(rest, input.slice(i), depth);
+    if (!rc.length) continue;
+    for (const l of lt) for (const r of rc) { out.push([l, ...r]); if (out.length >= CAP) return out; }
+  }
+  return out;
+}
+
+/* Deduplicate by canonical structural serialisation */
+function serTree(n) {
+  if (!n.isNT) return `T(${n.sym})`;
+  return `N(${n.sym}:${(n.prod||[]).join('')}[${n.children.map(serTree).join(',')}])`;
+}
+function deduplicate(trees) {
+  const seen = new Set();
+  return trees.filter(t => { const k = serTree(t); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+function buildAllParseTrees(grammar, str) {
+  G_RULES     = grammar.rules;
+  G_MEMO      = new Map();
+  G_VISIT     = new Set();
+  G_MAX_TREES = +document.getElementById('max-trees').value;
+  G_MAX_DEPTH = +document.getElementById('max-depth').value;
+  return deduplicate(getAllTrees(grammar.start, str, 0));
+}
+
+/* Deep-clone a tree and assign unique _id per node */
+let _idc = 0;
+function cloneTree(n) {
+  return { sym:n.sym, isNT:n.isNT, prod:n.prod, span:n.span, children:n.children.map(cloneTree), _id:++_idc };
+}
+
+/* ═══════════════════════════════════════════
+   3. LAYOUT ENGINE
+═══════════════════════════════════════════ */
+const NW=46, NH=30, NR=7, HSEP=16, VGAP=76, TPAD=28;
+
+function layoutTree(root) { measure(root); assign(root, TPAD, 0); }
+
+function measure(n) {
+  if (!n.children.length) { n.sw = NW + HSEP; return; }
+  n.children.forEach(measure);
+  n.sw = Math.max(NW + HSEP, n.children.reduce((s,c) => s + c.sw, 0));
+}
+
+function assign(n, left, depth) {
+  n.cx = left + n.sw / 2;
+  n.cy = TPAD + depth * VGAP + NH / 2;
+  if (!n.children.length) return;
+  const cw = n.children.reduce((s,c) => s + c.sw, 0);
+  let x = left + (n.sw - cw) / 2;
+  for (const c of n.children) { assign(c, x, depth + 1); x += c.sw; }
+}
+
+function treeDepth(n) {
+  if (!n.children.length) return 0;
+  return 1 + Math.max(...n.children.map(treeDepth));
+}
+
+/* ═══════════════════════════════════════════
+   4. SVG DOM RENDERER
+═══════════════════════════════════════════ */
+const NS = 'http://www.w3.org/2000/svg';
+function E(tag, attrs) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+function ET(tag, attrs, text) { const e = E(tag, attrs); e.textContent = text; return e; }
+
+/**
+ * Build an interactive SVG for the given parse tree.
+ * Returns { svg, nodeMap, edgeMap, root(layoutted clone) }
+ */
+function buildTreeSVG(rawRoot) {
+  _idc = 0;
+  const root = cloneTree(rawRoot);
+  layoutTree(root);
+
+  const depth = treeDepth(root);
+  const svgW = root.sw + TPAD * 2;
+  const svgH = (depth + 1) * VGAP + TPAD + 48;
+
+  const svg = E('svg', { width: svgW, height: svgH, viewBox: `0 0 ${svgW} ${svgH}`, class:'tsvg', style:'display:block;user-select:none' });
+
+  const nodeMap = new Map(); // _id → { node, g, rect }
+  const edgeMap = new Map(); // "pid-cid" → path element
+
+  /* Collect all parent→child pairs */
+  const pairs = [];
+  (function collectPairs(n) { for (const c of n.children) { pairs.push([n, c]); collectPairs(c); } })(root);
+
+  /* Edge layer */
+  const eLayer = E('g', { class:'edge-layer' });
+  for (const [p, c] of pairs) {
+    const x1=p.cx, y1=p.cy+NH/2, x2=c.cx, y2=c.cy-NH/2, my=(y1+y2)/2;
+    const path = E('path', { d:`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`, class:'tedge' });
+    eLayer.appendChild(path);
+    edgeMap.set(`${p._id}-${c._id}`, path);
+  }
+  svg.appendChild(eLayer);
+
+  /* Node layer */
+  const nLayer = E('g', { class:'node-layer' });
+  (function renderNode(n) {
+    const isNT = n.isNT;
+    const g = E('g', { class:`tree-node ${isNT ? 'nt' : 'tt'}`, 'data-nid': n._id });
+    const rx = n.cx - NW/2, ry = n.cy - NH/2;
+    const fill   = isNT ? 'url(#nt-grad)'  : 'url(#t-grad)';
+    const stroke = isNT ? '#3b82f6'         : '#22c55e';
+    const txtClr = isNT ? '#7ec8fd'         : '#4dde88';
+
+    const rect = E('rect', { x:rx, y:ry, width:NW, height:NH, rx:NR, fill, stroke, 'stroke-width':'1.5', class:'nr' });
+    g.appendChild(rect);
+    g.appendChild(ET('text', { x:n.cx, y:n.cy+5, 'text-anchor':'middle', fill:txtClr, 'font-family':'JetBrains Mono,monospace', 'font-size':'13', 'font-weight':'700' }, n.sym));
+
+    if (isNT) {
+      const lbl = n.prod && n.prod.length ? '→'+n.prod.join('') : '→ε';
+      g.appendChild(ET('text', { x:n.cx, y:ry+NH+11, 'text-anchor':'middle', fill:'#283848', 'font-family':'JetBrains Mono,monospace', 'font-size':'8.5' }, lbl));
+    }
+
+    nodeMap.set(n._id, { node:n, g, rect, isNT });
+
+    g.addEventListener('click', ev => {
+      ev.stopPropagation();
+      selectNode(n, svg, nodeMap, edgeMap);
+    });
+    nLayer.appendChild(g);
+    for (const c of n.children) renderNode(c);
+  })(root);
+
+  svg.appendChild(nLayer);
+
+  /* Click on background → deselect */
+  svg.addEventListener('click', () => { clearSel(nodeMap, edgeMap); hideNodeInfo(); });
+
+  return { svg, nodeMap, edgeMap, root, svgW, svgH };
+}
+
+/* ── Selection helpers ── */
+function descIds(n) { return [n._id, ...n.children.flatMap(descIds)]; }
+function childEdgeKeys(n) {
+  return n.children.flatMap(c => [`${n._id}-${c._id}`, ...childEdgeKeys(c)]);
+}
+
+function clearSel(nodeMap, edgeMap) {
+  for (const { g, rect, isNT } of nodeMap.values()) {
+    g.classList.remove('sel', 'shi');
+    rect.setAttribute('fill', isNT ? 'url(#nt-grad)' : 'url(#t-grad)');
+    rect.setAttribute('stroke', isNT ? '#3b82f6' : '#22c55e');
+    rect.setAttribute('stroke-width', '1.5');
+  }
+  for (const p of edgeMap.values()) { p.classList.remove('ehi'); p.setAttribute('stroke','#1a2535'); p.setAttribute('stroke-width','1.5'); }
+}
+
+function selectNode(n, svg, nodeMap, edgeMap) {
+  clearSel(nodeMap, edgeMap);
+  const ids = new Set(descIds(n));
+  const ekeys = new Set(childEdgeKeys(n));
+
+  for (const [id, { node, g, rect, isNT }] of nodeMap) {
+    if (id === n._id) {
+      g.classList.add('sel');
+      rect.setAttribute('fill', 'url(#sel-grad)');
+      rect.setAttribute('stroke', '#f0a030');
+      rect.setAttribute('stroke-width', '2.5');
+    } else if (ids.has(id)) {
+      g.classList.add('shi');
+      rect.setAttribute('stroke', '#b07020');
+      rect.setAttribute('stroke-width', '2');
+    }
+  }
+  for (const [k, p] of edgeMap) {
+    if (ekeys.has(k)) { p.classList.add('ehi'); p.setAttribute('stroke','rgba(220,140,30,.65)'); p.setAttribute('stroke-width','2'); }
+  }
+  showNodeInfo(n);
+}
+
+/* ── Node Info Panel ── */
+function showNodeInfo(n) {
+  document.getElementById('ni-type').textContent = n.isNT ? 'Non-Terminal' : 'Terminal';
+  const sym = document.getElementById('ni-sym');
+  sym.textContent = n.sym;
+  sym.className = 'ni-sym ' + (n.isNT ? 'nt' : 'tt');
+  const prod = document.getElementById('ni-prod');
+  prod.textContent = !n.isNT ? '(leaf — no production)' : (!n.prod || !n.prod.length) ? `${n.sym} → ε` : `${n.sym} → ${n.prod.join(' ')}`;
+  document.getElementById('ni-derv').textContent = n.span === '' ? 'ε (empty)' : `"${n.span}"`;
+  document.getElementById('nipanel').classList.add('vis');
+}
+function hideNodeInfo() { document.getElementById('nipanel').classList.remove('vis'); }
+
+/* ═══════════════════════════════════════════
+   5. PAN / ZOOM
+═══════════════════════════════════════════ */
+function setupPanZoom(viewport, wrapper) {
+  const s = { scale:1, tx:0, ty:0, dragging:false, sx:0, sy:0, stx:0, sty:0, viewport, wrapper };
+
+  s.apply = function() {
+    wrapper.style.transform = `translate(${s.tx}px,${s.ty}px) scale(${s.scale})`;
+    wrapper.style.transformOrigin = '0 0';
+  };
+
+  viewport.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const f = ev.deltaY < 0 ? 1.1 : 1/1.1;
+    const ns = Math.max(.2, Math.min(4, s.scale * f));
+    const r = viewport.getBoundingClientRect();
+    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    s.tx = mx - (mx - s.tx) * (ns / s.scale);
+    s.ty = my - (my - s.ty) * (ns / s.scale);
+    s.scale = ns;
+    s.apply();
+    setZoomLabel(viewport, s.scale);
+  }, { passive:false });
+
+  viewport.addEventListener('mousedown', ev => {
+    if (ev.button !== 0) return;
+    s.dragging = true; s.sx = ev.clientX; s.sy = ev.clientY; s.stx = s.tx; s.sty = s.ty;
+    viewport.classList.add('pgrab');
+    activePZ = s;
+    ev.preventDefault();
+  });
+
+  /* Touch */
+  let lastD = null, ts0 = null;
+  viewport.addEventListener('touchstart', ev => {
+    ev.preventDefault();
+    if (ev.touches.length === 1) { s.dragging = true; s.sx = ev.touches[0].clientX; s.sy = ev.touches[0].clientY; s.stx = s.tx; s.sty = s.ty; activePZ = s; }
+    if (ev.touches.length === 2) { s.dragging = false; lastD = dist2(ev.touches); ts0 = { scale:s.scale, tx:s.tx, ty:s.ty }; }
+  }, { passive:false });
+
+  viewport.addEventListener('touchmove', ev => {
+    ev.preventDefault();
+    if (ev.touches.length === 1 && s.dragging) { s.tx = s.stx + ev.touches[0].clientX - s.sx; s.ty = s.sty + ev.touches[0].clientY - s.sy; s.apply(); }
+    if (ev.touches.length === 2 && lastD && ts0) {
+      const d = dist2(ev.touches);
+      s.scale = Math.max(.2, Math.min(4, ts0.scale * d / lastD));
+      s.apply(); setZoomLabel(viewport, s.scale);
+    }
+  }, { passive:false });
+
+  viewport.addEventListener('touchend', () => { s.dragging = false; lastD = null; ts0 = null; if (activePZ === s) activePZ = null; });
+
+  s.apply();
+
+  return {
+    zoomIn:  () => { s.scale = Math.min(4, s.scale * 1.2); s.apply(); setZoomLabel(viewport, s.scale); },
+    zoomOut: () => { s.scale = Math.max(.2, s.scale / 1.2); s.apply(); setZoomLabel(viewport, s.scale); },
+    reset:   () => { s.scale = 1; s.tx = 0; s.ty = 0; s.apply(); setZoomLabel(viewport, s.scale); },
+  };
+}
+
+function dist2(ts) { return Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY); }
+function setZoomLabel(vp, sc) { const l = vp.closest('.tcard')?.querySelector('.zlbl'); if (l) l.textContent = Math.round(sc * 100) + '%'; }
+
+/* Global pan handlers */
+document.addEventListener('mousemove', ev => {
+  if (!activePZ?.dragging) return;
+  activePZ.tx = activePZ.stx + ev.clientX - activePZ.sx;
+  activePZ.ty = activePZ.sty + ev.clientY - activePZ.sy;
+  activePZ.apply();
+});
+document.addEventListener('mouseup', () => {
+  if (activePZ) { activePZ.dragging = false; activePZ.viewport.classList.remove('pgrab'); activePZ = null; }
+});
+
+/* ═══════════════════════════════════════════
+   6. LEFTMOST DERIVATION
+═══════════════════════════════════════════ */
+function getDerivation(root) {
+  const steps = [];
+  let sf = [root];
+  const str = f => f.map(n => n.sym).join('');
+  steps.push(str(sf));
+  for (let g = 60; g > 0; g--) {
+    const i = sf.findIndex(n => n.isNT);
+    if (i < 0) break;
+    sf = [...sf.slice(0, i), ...(sf[i].children || []), ...sf.slice(i+1)];
+    steps.push(str(sf));
+  }
+  return steps;
+}
+
+/* ═══════════════════════════════════════════
+   7. UTILITIES
+═══════════════════════════════════════════ */
+function escXML(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════
+   8. UI CONTROLLER
+═══════════════════════════════════════════ */
+function checkAmbiguity() {
+  const grammarText = document.getElementById('grammar-input').value.trim();
+  const inputStr    = document.getElementById('string-input').value;
+  const panel       = document.getElementById('results-panel');
+
+  hideNodeInfo();
+
+  if (!grammarText) { showError('Please enter a grammar.', panel); return; }
+  if (inputStr === '') { showError('Please enter an input string.', panel); return; }
+  if (inputStr.length > 12) { showError(`Input too long (${inputStr.length} chars). Max is 12.`, panel); return; }
+
+  let grammar;
+  try { grammar = parseGrammar(grammarText); }
+  catch(e) { showError('Grammar error: ' + e.message, panel); return; }
+
+  panel.innerHTML = `<div class="placeholder"><div class="ph-icon spin">⟳</div><p class="ph-txt">Generating parse trees…</p></div>`;
+
+  setTimeout(() => {
+    try {
+      const trees = buildAllParseTrees(grammar, inputStr);
+      renderResults(trees, inputStr, grammar, panel);
+    } catch(e) {
+      showError('Analysis error: ' + e.message, panel);
+    }
+  }, 20);
+}
+
+function renderResults(trees, inputStr, grammar, panel) {
+  const count    = trees.length;
+  const hitLimit = count >= G_MAX_TREES;
+
+  let verdict, vclass;
+  if (count === 0)               { verdict = 'NOT IN LANGUAGE'; vclass = 'vn'; }
+  else if (count === 1 && !hitLimit) { verdict = 'UNAMBIGUOUS';    vclass = 'vu'; }
+  else                               { verdict = 'AMBIGUOUS';      vclass = 'va'; }
+
+  const tcStr = count === 0 ? '0' : hitLimit ? `≥${count}` : `${count}`;
+
+  const grammarHTML = Object.entries(grammar.rules).map(([nt, prods]) => {
+    const ps = prods.map(p => {
+      if (!p.length) return '<span class="gt">ε</span>';
+      return p.map(s => /[A-Z]/.test(s) ? `<span class="gnt">${escXML(s)}</span>` : `<span class="gt">${escXML(s)}</span>`).join('');
+    }).join('<span class="gpipe"> | </span>');
+    return `<span class="gnt">${nt}</span><span class="garr"> → </span>${ps}`;
+  }).join('<br>');
+
+  let html = `
+    <div class="rhdg">
+      <div class="verdict ${vclass}"><span class="vdot"></span>${verdict}</div>
+      <div class="metarow">
+        <span class="mpill">String: <strong>"${escXML(inputStr)}"</strong></span>
+        <span class="mpill">Trees: <strong>${tcStr}</strong></span>
+        <span class="mpill">Start: <strong>${grammar.start}</strong></span>
+      </div>
+    </div>
+    <div class="gdisp">${grammarHTML}</div>
+    <div class="legend">
+      <span class="li"><span class="lb lb-nt"></span>Non-terminal</span>
+      <span class="li"><span class="lb lb-t"></span>Terminal</span>
+      <span class="li"><span class="lb lb-sel"></span>Selected / subtree</span>
+      <span class="lsep">·</span>
+      <span style="font-size:10px;color:var(--td)">Click to inspect · Scroll to zoom · Drag to pan</span>
+    </div>`;
+
+  if (count === 0) {
+    html += `<div class="errbox">The string <strong>"${escXML(inputStr)}"</strong> cannot be derived from start symbol <strong>${grammar.start}</strong> using the given grammar.</div>`;
+    panel.innerHTML = html;
+    return;
+  }
+
+  if (hitLimit) {
+    html += `<div class="warnbox">⚠ Tree limit (${G_MAX_TREES}) reached — showing first ${count} trees. The grammar is <strong>definitely ambiguous</strong>. Increase "Max Trees" or shorten the input for a full count.</div>`;
+  }
+
+  panel.innerHTML = html;
+
+  /* Build tree cards via DOM */
+  const grid = document.createElement('div');
+  grid.className = 'tgrid';
+  panel.appendChild(grid);
+
+  trees.forEach((rawTree, i) => {
+    const card = document.createElement('div');
+    card.className = 'tcard';
+    card.style.animationDelay = `${i * 0.05}s`;
+
+    /* Header */
+    const hdr = document.createElement('div');
+    hdr.className = 'tcardh';
+    hdr.innerHTML = `
+      <span>Parse Tree ${i+1} <span style="color:var(--td)">/ ${tcStr}</span></span>
+      <div class="zctrl">
+        <button class="zbtn" title="Zoom out">−</button>
+        <span class="zlbl">100%</span>
+        <button class="zbtn" title="Zoom in">+</button>
+        <button class="zbtn" title="Reset" style="font-size:9px">↺</button>
+      </div>`;
+    card.appendChild(hdr);
+
+    /* Viewport */
+    const vp = document.createElement('div');
+    vp.className = 'tvp';
+
+    /* Build SVG */
+    const { svg, nodeMap, edgeMap, svgW, svgH } = buildTreeSVG(rawTree);
+    const depth = treeDepth(rawTree);
+    const naturalH = (depth + 1) * VGAP + TPAD + 48;
+    vp.style.height = Math.min(400, Math.max(140, naturalH + 20)) + 'px';
+
+    /* Wrapper for transform */
+    const wrap = document.createElement('div');
+    wrap.className = 'twrap';
+    wrap.appendChild(svg);
+    vp.appendChild(wrap);
+    card.appendChild(vp);
+
+    /* Pan/zoom */
+    const pz = setupPanZoom(vp, wrap);
+    const [btnOut, btnIn, btnReset] = hdr.querySelectorAll('.zbtn');
+    btnOut.onclick = () => pz.zoomOut();
+    btnIn.onclick  = () => pz.zoomIn();
+    btnReset.onclick = () => pz.reset();
+
+    /* Derivation */
+    const ds = getDerivation(rawTree);
+    const dsec = document.createElement('div');
+    dsec.className = 'dersec';
+    const derivHTML = ds.map((step, si) => {
+      const col = step.replace(/[A-Z]/g, m => `<span class="dnt">${m}</span>`);
+      return col + (si < ds.length-1 ? '<span class="darr"> ⇒ </span>' : '');
+    }).join('');
+    dsec.innerHTML = `
+      <button class="dertog">▸ Leftmost derivation (${ds.length} step${ds.length!==1?'s':''})</button>
+      <div class="dersteps"><span>${derivHTML}</span></div>`;
+    dsec.querySelector('.dertog').addEventListener('click', function() {
+      const box = this.nextElementSibling;
+      const open = box.classList.toggle('open');
+      this.textContent = (open ? '▾' : '▸') + this.textContent.slice(1);
+    });
+    card.appendChild(dsec);
+
+    grid.appendChild(card);
+  });
+}
+
+function showError(msg, panel) {
+  (panel || document.getElementById('results-panel')).innerHTML =
+    `<div class="errbox" style="margin-top:6px">⚠ ${escXML(msg)}</div>`;
+}
+
+/* ═══════════════════════════════════════════
+   9. SAMPLES INIT
+═══════════════════════════════════════════ */
+(function() {
+  const list = document.getElementById('sample-list');
+  SAMPLES.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'sbtn';
+    btn.innerHTML = `<span>${escXML(s.label)}</span><span class="stag ${s.ambig ? 'stag-a' : 'stag-u'}">${s.ambig ? 'AMBIG' : 'UNAMB'}</span>`;
+    btn.onclick = () => {
+      document.getElementById('grammar-input').value = s.grammar;
+      document.getElementById('string-input').value  = s.input;
+    };
+    list.appendChild(btn);
+  });
+})();
+
+document.getElementById('string-input').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter') checkAmbiguity();
+});
+</script>
+</body>
+</html>
